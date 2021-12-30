@@ -56,11 +56,6 @@
  */
 int init_gpio(void); 
 
-/**
- * Used for testing purposes instead of init_gpio();
- */
-int test_init(void);
-
 
 /**
  * Unmaps the GPIO device of the Raspbery Pi.
@@ -119,7 +114,7 @@ int pull_direction(int pin);            //GPPULL
  */
 void pull_up(int pin);   //GPPULL PULL_UP
 void pull_down(int pin); //GPPULL PULL_DOWN
-void no_pull(int pin);	 //GPPULL NO_PULL
+void no_pull(int pin);	  //GPPULL NO_PULL
 
 /**
  *  Returns EVENT_OCCURED if an event had occured, otherwise NO_EVENT.
