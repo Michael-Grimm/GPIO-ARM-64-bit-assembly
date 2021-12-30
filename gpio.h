@@ -3,16 +3,16 @@
  * (Offsets from the gpio base address) 
  */
 #define GPFSEL 0x00 //GPIO Function Select                  Read/Write access
-#define GPSET  0x1C //GPIO Set Pin Output  (HIGH),  		Write access
-#define GPCLR  0x28 //GPIO Clear Pin Output  (LOW), 		Write access
-#define GPLEV  0x34 //GPIO Pin Level, 					    Read access 
-#define GPEDS  0x40 //GPIO Pin Event Detect Status  		Read/Write access
-#define GPREN  0x4C //GPIO Pin Rising Edge Detect Enable	Read/Write access 
-#define GPFEN  0x58 //GPIO Pin Falling Edge Detect Enable	Read/Write access 
-#define GPHEN  0x64 //GPIO Pin High Detect Enable			Read/Write access 
-#define GPLEN  0x70 //GPIO Pin Low Detect Enable			Read/Write access 
-#define GPAREN 0x7C //GPIO Pin Async. Rising Edge Detect	Read/Write access
-#define GPAFEN 0x88 //GPIO Pin Async. Falling Edge Detect	Read/Write access 
+#define GPSET  0x1C //GPIO Set Pin Output  (HIGH),          Write 1 bit
+#define GPCLR  0x28 //GPIO Clear Pin Output  (LOW),         Write 1 bit
+#define GPLEV  0x34 //GPIO Pin Level,                       Read access 
+#define GPEDS  0x40 //GPIO Pin Event Detect Status          Read/Write 1 bit to clear
+#define GPREN  0x4C //GPIO Pin Rising Edge Detect Enable    Read/Write access 
+#define GPFEN  0x58 //GPIO Pin Falling Edge Detect Enable   Read/Write access 
+#define GPHEN  0x64 //GPIO Pin High Detect Enable           Read/Write access 
+#define GPLEN  0x70 //GPIO Pin Low Detect Enable            Read/Write access 
+#define GPAREN 0x7C //GPIO Pin Async. Rising Edge Detect    Read/Write access
+#define GPAFEN 0x88 //GPIO Pin Async. Falling Edge Detect   Read/Write access 
 #define GPPULL 0xe4 //GPIO_PUP_PDN_CNTRL_REG Pull-up/-down  Read/Write access
 
 
@@ -85,14 +85,14 @@ long long gpio_base(void);
 /**
  * Set gpio function for a pin
  */
-void input(int pin);	// GPFSEL INPUT
-void output(int pin);	// GPFSEL OUTPUT
-void alt0(int pin);	// GPFSEL ALTERNATE_FUNCTION_0
-void alt1(int pin);	// GPFSEL ALTERNATE_FUNCTION_1
-void alt2(int pin);	// GPFSEL ALTERNATE_FUNCTION_2
-void alt3(int pin);	// GPFSEL ALTERNATE_FUNCTION_3
-void alt4(int pin);	// GPFSEL ALTERNATE_FUNCTION_4
-void alt5(int pin);	// GPFSEL ALTERNATE_FUNCTION_5
+void input(int pin);  // GPFSEL INPUT
+void output(int pin); // GPFSEL OUTPUT
+void alt0(int pin);   // GPFSEL ALTERNATE_FUNCTION_0
+void alt1(int pin);   // GPFSEL ALTERNATE_FUNCTION_1
+void alt2(int pin);   // GPFSEL ALTERNATE_FUNCTION_2
+void alt3(int pin);   // GPFSEL ALTERNATE_FUNCTION_3
+void alt4(int pin);   // GPFSEL ALTERNATE_FUNCTION_4
+void alt5(int pin);   // GPFSEL ALTERNATE_FUNCTION_5
 
 /**
  * Set output pin to low or high
@@ -104,28 +104,28 @@ void high(int pin); //GPSET
 /**
  * Getter functions for readable gpio registers
  */
-int function(int pin); 					//GPFSEL   
-int level(int pin);  					//GPLEV
-int rising_edge_detect(int pin);  		//GPREN
+int function(int pin);                  //GPFSEL   
+int level(int pin);                     //GPLEV
+int rising_edge_detect(int pin);        //GPREN
 int falling_edge_detect(int pin);       //GPFEN
 int high_detect(int pin);               //GPHEN
 int low_detect(int pin);                //GPLEN
 int async_rising_edge_detect(int pin);  //GPAREN 
-int async_falling_edge_detect(int pin);	//GPAFEN
+int async_falling_edge_detect(int pin); //GPAFEN
 int pull_direction(int pin);            //GPPULL
 
 /**
  * Set functions for pullup-pull-down register
  */
-void pull_up(int pin);		// GPPULL PULL_UP
-void pull_down(int pin);	// GPPULL PULL_DOWN
-void no_pull(int pin);		// GPPULL NO_PULL
+void pull_up(int pin);   //GPPULL PULL_UP
+void pull_down(int pin); //GPPULL PULL_DOWN
+void no_pull(int pin);	 //GPPULL NO_PULL
 
 /**
  *  Returns EVENT_OCCURED if an event had occured, otherwise NO_EVENT.
  *  Does not clear the event in the GPEDS register.
  */
-int event(int pin);  					//GPEDS
+int event(int pin); //GPEDS
 
 /**
  * Clears an event.
@@ -137,11 +137,11 @@ void clear_event(int pin);
  * If there was an event, the GPEDS register entry for the pin is 
  * immediatly cleared.
  * This function is faster than 
- *      int e = event(pin);
- * 		if(e==EVENT_OCCURED){ 
- *			clear_event(pin);
- *		}
- *		return e;
+ *   int e = event(pin);
+ *   if(e==EVENT_OCCURED){ 
+ *       clear_event(pin);
+ *   }
+ *   return e;
  */
 int get_event_and_clear(int pin); 
 
@@ -155,22 +155,22 @@ int get_event_and_clear(int pin);
  * status register."
  * BCM2711 ARM Peripherals manual, p.64 
  */
-void enable_rising_edge_detect(int pin);		// GPREN 
-void enable_falling_edge_detect(int pin);		// GPFEN 
-void enable_high_detect(int pin);				// GPHEN 
-void enable_low_detect(int pin);				// GPLEN 
-void enable_async_rising_edge_detect(int pin);	// GPAREN 
-void enable_async_falling_edge_detect(int pin);	// GPAFEN  
+void enable_rising_edge_detect(int pin);       // GPREN 
+void enable_falling_edge_detect(int pin);      // GPFEN 
+void enable_high_detect(int pin);			   // GPHEN 
+void enable_low_detect(int pin);               // GPLEN 
+void enable_async_rising_edge_detect(int pin); // GPAREN 
+void enable_async_falling_edge_detect(int pin);// GPAFEN  
 
 /**
  * It is recommended to disable the 'detect' registers as soon as they are
  * no longer needed.
  */
-void disable_rising_edge_detect(int pin);		// GPREN 
-void disable_falling_edge_detect(int pin);		// GPFEN 
-void disable_high_detect(int pin);				// GPHEN 
-void disable_low_detect(int pin);				// GPLEN 
-void disable_async_rising_edge_detect(int pin);	// GPAREN 
+void disable_rising_edge_detect(int pin);       // GPREN 
+void disable_falling_edge_detect(int pin);      // GPFEN 
+void disable_high_detect(int pin);              // GPHEN 
+void disable_low_detect(int pin);               // GPLEN 
+void disable_async_rising_edge_detect(int pin); // GPAREN 
 void disable_async_falling_edge_detect(int pin);// GPAFEN  
 
 
