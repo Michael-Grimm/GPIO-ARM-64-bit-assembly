@@ -157,7 +157,7 @@ int get_event_and_clear(int pin);
  */
 void enable_rising_edge_detect(int pin);       // GPREN 
 void enable_falling_edge_detect(int pin);      // GPFEN 
-void enable_high_detect(int pin);			   // GPHEN 
+void enable_high_detect(int pin);              // GPHEN 
 void enable_low_detect(int pin);               // GPLEN 
 void enable_async_rising_edge_detect(int pin); // GPAREN 
 void enable_async_falling_edge_detect(int pin);// GPAFEN  
