@@ -1,0 +1,347 @@
+/** 
+ * Register Aliases for better readability of the source code
+ * Names ending in an underscore are 32-bit registers 
+ */
+
+gpio_base_address   .req x8
+
+pin_number          .req x9  //0...58
+pin_bits  		    .req x10  //1, 2 or 3
+pin_bits_ 		    .req w10
+pin_mask     		.req x11 //1, 3 or 7 
+pin_mask_    		.req w11 
+pins_per_register  	.req x12 //32, 16, 10
+pins_per_register_ 	.req w12
+pin_position 		.req x13 //position of the pin-area within a register
+pin_position_ 		.req w13
+pin_value           .req x14 //value of 1, 2 or 3 bits 
+pin_value_          .req w14 
+
+register0  		    .req x15  //offset of GP...0 from the gpio_base_address
+register0_  		.req w15
+register_address  	.req x16 //=gpio_base_address + register0 + register_offset
+register_size       .req x17 //see REGISTER_SIZE
+register_offset  	.req x18 //offset of GP...x from GP...0
+register_value  	.req x19 
+register_value_  	.req w19 
+register_index      .req x20 //the x of GP...x, e.g. GPLEV0, GPLEV1
+
+//temporary values within a function
+tmp1     			.req x21
+tmp1_    			.req w21
+tmp2 	 			.req x22
+tmp2_ 	 			.req w22
+remainder   		.req x23
+bytes               .req x24  
+new_value           .req x25 
+new_value_          .req w25  
+tmp3				.req x26
+tmp3_				.req w26
+
+
+/**
+ * Constants used for the mapping/unmapping of /dev/gpiomem
+ */
+.equ BLOCK_SIZE, 4096
+.equ MAP_FAILED, -1
+.equ MAP_SHARED, 1
+.equ O_RDWR,   02
+.equ O_SYNC,   010000
+.equ PROT_READ, 1
+.equ PROT_WRITE, 2
+.equ SYSCALL_MMAP, 222
+.equ SYSCALL_OPENAT, 56
+.equ SYSCALL_CLOSE, 57
+.equ SYSCALL_MUNMAP, 215  
+//.equ GPIO_BASE, 0xFE200000 
+// Only needed for mapping of /dev/mem:
+// see:
+// https://sourceforge.net/p/raspberry-gpio-python/code/ci/default/tree/source/c_gpio.c)
+
+
+/**
+* Offsets for gpio registers  
+*/
+.equ GPFSEL,0x00	//GPIO Function Select 0
+.equ GPSET,	0x1C	//GPIO Set Pin Output  (=HIGH)
+.equ GPCLR,	0x28	//GPIO Clear Pin Output  (=LOW)
+.equ GPLEV,	0x34    //GPIO Pin Level 
+.equ GPEDS,	0x40    //GPIO Pin Event Detect Status 
+.equ GPREN,	0x4C    //GPIO Pin Rising Edge Detect Enable 
+.equ GPFEN,	0x58    //GPIO Pin Falling Edge Detect Enable
+.equ GPHEN,	0x64    //GPIO Pin High Detect Enable 
+.equ GPLEN,	0x70    //GPIO Pin Low Detect Enable 
+.equ GPAREN,0x7C    //GPIO Pin Async. Rising Edge Detect 
+.equ GPAFEN,0x88    //GPIO Pin Async. Falling Edge Detect
+.equ GPPULL,0xe4    //GPIO_PUP_PDN_CNTRL_REG Pull-up/Pull-down Register
+
+/**
+ * Functions for the GPFSEL register
+ */
+.equ INPUT, 0
+.equ OUTPUT, 1
+.equ ALTERNATE_FUNCTION_0, 4
+.equ ALTERNATE_FUNCTION_1, 5
+.equ ALTERNATE_FUNCTION_2, 6
+.equ ALTERNATE_FUNCTION_3, 7
+.equ ALTERNATE_FUNCTION_4, 3
+.equ ALTERNATE_FUNCTION_5, 2
+
+/**
+ * Values for the GPPULL register
+ */
+.equ PULL_UP, 1
+.equ PULL_DOWN, 2
+.equ NO_PULL, 0	
+
+/**
+ * Other constants
+ */
+.equ REGISTER_SIZE, 32
+
+
+	.data
+/**
+ * Storage for the base address of gpio register
+ */
+ .global gpio
+gpio: 	.quad
+
+
+
+    .section .rodata
+dev_gpiomem_path:		.asciz "/dev/gpiomem"
+
+
+
+
+/**
+ * Twin macros for reducing the boilerplate
+ * of creating a function 
+ */	
+	.text
+.macro BEGIN_FUNC functionName
+	.type \functionName, %function
+	.global \functionName
+	\functionName:
+	stp x29, x30, [sp, #-16]!
+.endm 
+
+.macro END_FUNC functionName
+	ldp x29, x30, [sp], #16
+	ret
+	.size \functionName, (. - \functionName)
+.endm
+
+
+
+/**
+ * Mapping the gpio device  
+ * First function that has to be called.
+ */
+BEGIN_FUNC init_gpio
+     //Open the /dev/gpiomem for r/w access
+     mov x0, #-100     		//-100: use current directory for the syscsall openat
+     adr x1, dev_gpiomem_path		
+     mov w2, #(O_RDWR | O_SYNC)
+     mov w8, SYSCALL_OPENAT
+     svc #0
+     cmp x0, #0 			//Filedescriptor or negative error number in x0
+     blt end_init    		//returns negative error number
+       
+	 /** 
+	  *   Mapping /dev/gpiomem
+	  *              x0         x1           x2         x3       x4       x5 
+	  *   mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+	  */
+     mov x5, xzr 			//Offset is 0 in /dev/gpiomem 
+     mov x4, x0 
+     mov x3, #MAP_SHARED  	 
+     mov x2, #(PROT_READ + PROT_WRITE) 
+     mov x1, #BLOCK_SIZE   
+     mov x0, xzr
+     mov x8, SYSCALL_MMAP
+     svc #0
+     cmp x0, #0 			//Virtual address or negative error number in x0
+     blt end_init    		//returns negative error number
+     adr x1, gpio           //Saving virtual address x0 for other functions
+     str x0, [x1]
+     //Closing the /dev/gpiomem file
+     mov x0, x4  
+     mov x8, SYSCALL_CLOSE
+     svc #0    
+     mov x0, xzr
+     end_init:
+END_FUNC init_gpio
+
+/**
+ * Unmapping the gpio device
+ * Last function call in a program
+ */
+BEGIN_FUNC close_gpio
+	adr x0, gpio
+	ldr x0, [x0]
+    mov x1, #BLOCK_SIZE
+    mov x8, SYSCALL_MUNMAP
+    svc #0
+END_FUNC close_gpio
+
+
+
+/**
+ * Returns the gpio base address in x0.
+ */
+BEGIN_FUNC gpio_base
+   	adr x1, gpio   
+	ldr x0, [x1]      
+END_FUNC gpio_base
+
+
+
+
+/**
+ * This code is acccessing the values of gpio registers for a given 
+ * pin number.
+ * Input: pin number in x0
+ */
+.macro GPIO_REGISTER_ACCESS REG0 BITS=1 MASK=1 
+	mov pin_number, x0
+	mov register0, #\REG0
+    mov pin_bits, #\BITS                        
+    mov pin_mask_, #\MASK  
+    adr tmp1, gpio     
+	ldr gpio_base_address, [tmp1]
+    mov register_size, #REGISTER_SIZE 
+    mov tmp1, #8
+    udiv bytes, register_size, tmp1         
+    udiv pins_per_register, register_size, pin_bits  
+    //modular division: register_index = pin_number / pins_per_register
+    //                  remainder = pin_number % pins_per_register 
+    //                            = pin_number - (register_index * pins_per_register)        
+    udiv register_index, pin_number, pins_per_register
+    mul  tmp2, register_index, pins_per_register
+    sub  remainder, pin_number, tmp2    
+	mul pin_position, remainder, pin_bits 
+    lsl pin_mask_, pin_mask_, pin_position_ 
+    mul register_offset, register_index, bytes  //offset from GP...0
+    add register_offset, register_offset, register0   //now offset from gpio base address
+	add register_address, gpio_base_address, register_offset    // gpio base + offset -> Address of GP...x
+    ldr register_value_, [register_address]     
+    and tmp3_, register_value_, pin_mask_
+    lsr pin_value_, tmp3_, pin_position_   
+.endm 
+
+/**
+ * This macro creates getter-functions for retrieving the values of gpio registers
+ * Input: pin number in x0
+ * Output: the requestet value/status in x0
+ */
+.macro GETTER FUNCTIONNAME REG0 BITS=1 MASK=1
+	BEGIN_FUNC \FUNCTIONNAME
+		GPIO_REGISTER_ACCESS \REG0 \BITS \MASK
+		mov x0, pin_value
+	END_FUNC \FUNCTIONNAME
+.endm
+
+GETTER function GPFSEL 3 7
+GETTER pull_direction GPPULL 2 3
+GETTER level GPLEV 
+GETTER event GPEDS
+GETTER rising_edge_detect GPREN
+GETTER falling_edge_detect GPFEN
+GETTER high_detect GPHEN
+GETTER low_detect GPLEN
+GETTER async_rising_edge_detect GPAREN 
+GETTER async_falling_edge_detect GPAFEN
+
+/**
+ * Creates setter-functions for setting GPFSEL functions like INPUT, OUTPUT, ALT0 etc.
+ * and GPPUL directions like UP, DOWN, NONE
+ */
+.macro SETFUNCTION FUNCTIONNAME GPFUNC REG0=GPFSEL  BITS=3 MASK=7
+	BEGIN_FUNC \FUNCTIONNAME
+		GPIO_REGISTER_ACCESS \REG0 \BITS \MASK
+		bic register_value_, register_value_, pin_mask_
+   		mov new_value_, #\GPFUNC
+        lsl new_value_, new_value_, pin_position_
+		orr register_value_, register_value_, new_value_
+		str register_value_, [register_address]
+		mov x0, #0
+	END_FUNC \FUNCTIONNAME
+.endm  
+
+SETFUNCTION input	 INPUT
+SETFUNCTION output	 OUTPUT
+SETFUNCTION alt0	 ALTERNATE_FUNCTION_0
+SETFUNCTION alt1	 ALTERNATE_FUNCTION_1
+SETFUNCTION alt2	 ALTERNATE_FUNCTION_2
+SETFUNCTION alt3	 ALTERNATE_FUNCTION_3
+SETFUNCTION alt4	 ALTERNATE_FUNCTION_4
+SETFUNCTION alt5	 ALTERNATE_FUNCTION_5
+SETFUNCTION pull_up  PULL_UP	GPPULL 2 3
+SETFUNCTION pull_down PULL_DOWN GPPULL 2 3
+SETFUNCTION no_pull NO_PULL GPPULL 2 3
+
+/**
+ * This macro creates enable/disable-functions which set/clear the bit for a pin.
+ * This can only be used with registers with 1 bit per pin (except GPSET and GPCLR)
+ * Input: pin number in x0
+ */
+.macro ENABLER_DISABLER FUNCTIONNAME REG0 INSTRUCTION=orr
+	BEGIN_FUNC \FUNCTIONNAME
+		GPIO_REGISTER_ACCESS \REG0 1 1
+		\INSTRUCTION register_value_, register_value_, pin_mask_
+		str register_value_, [register_address]
+		mov x0, #0
+	END_FUNC \FUNCTIONNAME
+.endm
+
+ENABLER_DISABLER enable_rising_edge_detect GPREN 
+ENABLER_DISABLER enable_falling_edge_detect GPFEN 
+ENABLER_DISABLER enable_high_detect GPHEN 
+ENABLER_DISABLER enable_low_detect GPLEN 
+ENABLER_DISABLER enable_async_rising_edge_detect	GPAREN 
+ENABLER_DISABLER enable_async_falling_edge_detect GPAFEN  
+ENABLER_DISABLER disable_rising_edge_detect GPREN bic
+ENABLER_DISABLER disable_falling_edge_detect GPFEN bic
+ENABLER_DISABLER disable_high_detect GPHEN bic
+ENABLER_DISABLER disable_low_detect GPLEN bic
+ENABLER_DISABLER disable_async_rising_edge_detect	GPAREN bic
+ENABLER_DISABLER disable_async_falling_edge_detect GPAFEN  bic
+
+
+/**
+ * Creates a function that sets a single bit in a register. 
+ * Only to be used with GPCLR, CPSET or GPEDS
+ * Input: pin in x0
+ */
+.macro SET1BIT FUNCTIONNAME REG0
+     BEGIN_FUNC \FUNCTIONNAME
+		GPIO_REGISTER_ACCESS \REG0 
+		str pin_mask_, [register_address]
+		mov x0, #0
+     END_FUNC \FUNCTIONNAME		
+.endm
+
+SET1BIT low GPCLR
+SET1BIT high GPSET
+SET1BIT clear_event GPEDS
+
+ 
+ /**
+ * Returns 1 if an event had occured, otherwise 0.
+ * If there was an event, the GPEDS register is immediatly cleared.
+ * Input: pin in x0
+ * Output: 0 or 1 in x0
+ */
+BEGIN_FUNC get_event_and_clear
+		GPIO_REGISTER_ACCESS GPEDS
+		cmp pin_value, #0
+		beq end_get_event_and_clear
+		str pin_mask_, [register_address] 
+        end_get_event_and_clear:
+		mov x0, pin_value
+END_FUNC get_event_and_clear
+
+ 
+
